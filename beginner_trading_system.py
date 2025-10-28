@@ -13,20 +13,32 @@ from tqdm import tqdm
 from data_fetcher import NepseDataFetcher
 from signal_generator import TradingSignalGenerator
 from backtesting_engine import BacktestingEngine
-from config import TRADING_RULES, BACKTEST_CONFIG, OUTPUT_DIR
+from config import TRADING_RULES, BACKTEST_CONFIG, OUTPUT_DIR, INVESTMENT_CAPITAL
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class BeginnerTradingSystem:
-    def __init__(self, capital: float = 3000):
-        self.capital = capital
+    def __init__(self, capital: float = None):
+        # Use capital from config.py if not provided
+        self.capital = capital if capital is not None else INVESTMENT_CAPITAL['total_budget']
+        self.max_per_stock = INVESTMENT_CAPITAL['max_per_stock']
+        self.recommended_per_stock = INVESTMENT_CAPITAL['recommended_per_stock']
+        self.cash_reserve = INVESTMENT_CAPITAL['cash_reserve']
+        self.min_investment = INVESTMENT_CAPITAL['min_investment']
+        self.max_positions = INVESTMENT_CAPITAL['max_positions']
+        
         self.data_fetcher = NepseDataFetcher()
         self.signal_generator = TradingSignalGenerator()
-        self.backtest_engine = BacktestingEngine(initial_capital=capital)
+        self.backtest_engine = BacktestingEngine(initial_capital=self.capital)
         
         # Create output directory
         os.makedirs(OUTPUT_DIR, exist_ok=True)
+        
+        logger.info(f"Initialized system with NPR {self.capital:,} budget")
+        logger.info(f"Max per stock: {self.max_per_stock*100:.0f}% (NPR {self.capital*self.max_per_stock:,.0f})")
+        logger.info(f"Recommended per stock: {self.recommended_per_stock*100:.0f}% (NPR {self.capital*self.recommended_per_stock:,.0f})")
+        logger.info(f"Cash reserve: {self.cash_reserve*100:.0f}% (NPR {self.capital*self.cash_reserve:,.0f})")
         
     def validate_price_data(self, df: pd.DataFrame, symbol: str) -> pd.DataFrame:
         """Validate and clean price data to fix high/low issues"""
@@ -117,31 +129,57 @@ class BeginnerTradingSystem:
         logger.info(f"Found {len(suitable_stocks)} beginner-friendly stocks")
         return suitable_stocks[:25]  # Top 25 for analysis
     
-    def calculate_position_size_for_beginner(self, price: float, capital: float) -> Dict:
-        """Calculate appropriate position size for beginner"""
-        # Conservative approach for beginners
-        max_position_value = min(capital * 0.4, 1200)  # Max 40% or 1200 NPR
-        min_position_value = 500  # Minimum viable trade
-        
+    def calculate_position_size_for_beginner(self, price: float, available_capital: float) -> Dict:
+        """Calculate appropriate position size based on config.py settings"""
         if price <= 0:
             return {'shares': 0, 'value': 0, 'reason': 'Invalid price'}
         
-        # Calculate shares
+        # Use settings from config.py
+        max_position_value = min(
+            self.capital * self.max_per_stock,  # Max % from config
+            available_capital * 0.8  # Don't use all available capital at once
+        )
+        recommended_position_value = self.capital * self.recommended_per_stock
+        min_position_value = self.min_investment
+        
+        # Calculate shares for different scenarios
         max_shares = int(max_position_value / price)
+        recommended_shares = int(recommended_position_value / price)
         min_shares = int(min_position_value / price)
         
+        # Check if stock is affordable
         if max_shares < min_shares:
-            return {'shares': 0, 'value': 0, 'reason': 'Stock too expensive for budget'}
+            return {
+                'shares': 0, 
+                'value': 0, 
+                'reason': f'Stock too expensive - need NPR {min_position_value:,.0f} minimum but max allowed is NPR {max_position_value:,.0f}'
+            }
         
-        # Recommend conservative position
-        recommended_shares = max(min_shares, min(max_shares, int(800 / price)))
-        recommended_value = recommended_shares * price
+        # Use recommended shares, but ensure it's within limits
+        final_shares = max(min_shares, min(recommended_shares, max_shares))
+        final_value = final_shares * price
+        
+        # Final validation
+        if final_value > available_capital:
+            # Adjust to available capital
+            final_shares = int(available_capital * 0.8 / price)
+            final_value = final_shares * price
+            
+            if final_shares < min_shares:
+                return {
+                    'shares': 0, 
+                    'value': 0, 
+                    'reason': f'Insufficient capital - need NPR {min_position_value:,.0f} but only NPR {available_capital:,.0f} available'
+                }
         
         return {
-            'shares': recommended_shares,
-            'value': recommended_value,
-            'percentage_of_capital': (recommended_value / capital) * 100,
-            'reason': 'Suitable for beginner'
+            'shares': final_shares,
+            'value': final_value,
+            'percentage_of_capital': (final_value / self.capital) * 100,
+            'percentage_of_available': (final_value / available_capital) * 100,
+            'reason': 'Suitable for investment',
+            'max_allowed': max_position_value,
+            'recommended_amount': recommended_position_value
         }
     
     def run_beginner_analysis(self) -> Dict:
@@ -552,8 +590,8 @@ class BeginnerTradingSystem:
         return excel_file
 
 if __name__ == "__main__":
-    # Run the beginner trading system
-    system = BeginnerTradingSystem(capital=3000)
+    # Run the beginner trading system using config.py settings
+    system = BeginnerTradingSystem()  # Will use INVESTMENT_CAPITAL from config.py
     results = system.run_beginner_analysis()
     
     if results:
