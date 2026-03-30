@@ -1,8 +1,6 @@
 # NEPSE Trading System - Git Ignore File
 
 # Folders to exclude from git
-backend/
-output/
 
 # Python cache and compiled files
 __pycache__/

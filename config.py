@@ -54,37 +54,19 @@ TRADING_RULES = {
 
 INVESTMENT_CAPITAL = {
     # 🎯 MAIN SETTING: Change this to your total investment budget
-    'total_budget': 500000,        # Your total investment budget in NPR
+    'total_budget': 20000,        # Your total investment budget in NPR
     
     # 📊 POSITION SIZING RULES (as percentage of total budget)
     'max_per_stock': 0.30,       # Maximum 30% of budget per stock (NPR 900 for 3000 budget)
     'recommended_per_stock': 0.25, # Recommended 25% of budget per stock (NPR 750 for 3000 budget)
     'cash_reserve': 0.30,        # Keep 30% as cash reserve (NPR 900 for 3000 budget)
     
-    # 💵 MINIMUM INVESTMENT RULES
-    'min_investment': 500,       # Minimum investment per stock in NPR
+    # 💵 NEPSE TRADING RULES
+    'min_shares': 10,            # 🚨 NEPSE REQUIREMENT: Minimum 10 shares per transaction
+    'min_investment': 500,       # Minimum investment per stock in NPR (after 10 share rule)
     'max_positions': 4           # Maximum number of stocks to hold at once
 }
 
-# 📋 EXAMPLES FOR DIFFERENT BUDGETS:
-# 
-# For NPR 5,000 budget:
-# 'total_budget': 5000
-# Max per stock: NPR 1,500 (30%)
-# Recommended per stock: NPR 1,250 (25%)
-# Cash reserve: NPR 1,500 (30%)
-#
-# For NPR 10,000 budget:
-# 'total_budget': 10000
-# Max per stock: NPR 3,000 (30%)
-# Recommended per stock: NPR 2,500 (25%)
-# Cash reserve: NPR 3,000 (30%)
-#
-# For NPR 50,000 budget:
-# 'total_budget': 50000
-# Max per stock: NPR 15,000 (30%)
-# Recommended per stock: NPR 12,500 (25%)
-# Cash reserve: NPR 15,000 (30%)
 
 # Backtesting Configuration
 BACKTEST_CONFIG = {

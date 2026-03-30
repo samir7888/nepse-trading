@@ -1,0 +1,68 @@
+name: NEPSE Trading System
+
+on:
+  schedule:
+    # Run every 2 days at 9:00 AM UTC (2:45 PM Nepal Time)
+    - cron: "0 9 */2 * *"
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  run-trading-system:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          pip install .
+
+      - name: Start backend server in background
+        run: |
+          cd backend/example
+          python NepseServer.py &
+          echo $! > server.pid
+          sleep 10  # Give server time to start
+
+      - name: Run trading system
+        run: |
+          python beginner_trading_system.py > trading_output.txt 2>&1
+
+      - name: Stop backend server
+        run: |
+          if [ -f backend/example/server.pid ]; then
+            kill $(cat backend/example/server.pid) || true
+          fi
+
+      - name: Send email with results
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+        run: |
+          python send_trading_email.py
+
+      - name: Upload output as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: trading-output
+          path: |
+            trading_output.txt
+            output/

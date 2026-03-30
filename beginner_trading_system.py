@@ -27,6 +27,7 @@ class BeginnerTradingSystem:
         self.cash_reserve = INVESTMENT_CAPITAL['cash_reserve']
         self.min_investment = INVESTMENT_CAPITAL['min_investment']
         self.max_positions = INVESTMENT_CAPITAL['max_positions']
+        self.min_shares = INVESTMENT_CAPITAL['min_shares']  # NEPSE minimum 10 shares rule
         
         self.data_fetcher = NepseDataFetcher()
         self.signal_generator = TradingSignalGenerator()
@@ -130,9 +131,20 @@ class BeginnerTradingSystem:
         return suitable_stocks[:25]  # Top 25 for analysis
     
     def calculate_position_size_for_beginner(self, price: float, available_capital: float) -> Dict:
-        """Calculate appropriate position size based on config.py settings"""
+        """Calculate appropriate position size based on config.py settings with NEPSE 10 shares minimum rule"""
         if price <= 0:
             return {'shares': 0, 'value': 0, 'reason': 'Invalid price'}
+        
+        # 🚨 NEPSE RULE: Minimum 10 shares per transaction
+        nepse_min_value = self.min_shares * price
+        
+        # Check if we can afford minimum NEPSE requirement
+        if nepse_min_value > available_capital:
+            return {
+                'shares': 0, 
+                'value': 0, 
+                'reason': f'NEPSE requires minimum {self.min_shares} shares (NPR {nepse_min_value:,.0f}) but only NPR {available_capital:,.0f} available'
+            }
         
         # Use settings from config.py
         max_position_value = min(
@@ -140,36 +152,46 @@ class BeginnerTradingSystem:
             available_capital * 0.8  # Don't use all available capital at once
         )
         recommended_position_value = self.capital * self.recommended_per_stock
-        min_position_value = self.min_investment
+        min_position_value = max(self.min_investment, nepse_min_value)  # Use higher of config min or NEPSE min
         
         # Calculate shares for different scenarios
         max_shares = int(max_position_value / price)
         recommended_shares = int(recommended_position_value / price)
-        min_shares = int(min_position_value / price)
+        min_shares_by_value = int(min_position_value / price)
         
-        # Check if stock is affordable
-        if max_shares < min_shares:
+        # Ensure all calculations respect NEPSE minimum
+        max_shares = max(self.min_shares, max_shares)
+        recommended_shares = max(self.min_shares, recommended_shares)
+        min_shares_by_value = max(self.min_shares, min_shares_by_value)
+        
+        # Check if stock is affordable after NEPSE rule
+        if max_shares < self.min_shares:
             return {
                 'shares': 0, 
                 'value': 0, 
-                'reason': f'Stock too expensive - need NPR {min_position_value:,.0f} minimum but max allowed is NPR {max_position_value:,.0f}'
+                'reason': f'Stock too expensive - NEPSE requires {self.min_shares} shares (NPR {nepse_min_value:,.0f}) but max allowed is NPR {max_position_value:,.0f}'
             }
         
-        # Use recommended shares, but ensure it's within limits
-        final_shares = max(min_shares, min(recommended_shares, max_shares))
+        # Use recommended shares, but ensure it's within limits and respects NEPSE rule
+        final_shares = max(self.min_shares, min_shares_by_value, min(recommended_shares, max_shares))
+        
+        # Round to multiples of 10 for easier trading (optional but recommended)
+        final_shares = max(self.min_shares, (final_shares // 10) * 10)
+        
         final_value = final_shares * price
         
         # Final validation
         if final_value > available_capital:
-            # Adjust to available capital
-            final_shares = int(available_capital * 0.8 / price)
+            # Adjust to available capital while respecting NEPSE rule
+            max_affordable_shares = int(available_capital * 0.8 / price)
+            final_shares = max(self.min_shares, (max_affordable_shares // 10) * 10)
             final_value = final_shares * price
             
-            if final_shares < min_shares:
+            if final_shares < self.min_shares or final_value > available_capital:
                 return {
                     'shares': 0, 
                     'value': 0, 
-                    'reason': f'Insufficient capital - need NPR {min_position_value:,.0f} but only NPR {available_capital:,.0f} available'
+                    'reason': f'Insufficient capital - need NPR {nepse_min_value:,.0f} minimum (NEPSE rule) but only NPR {available_capital:,.0f} available'
                 }
         
         return {
@@ -177,9 +199,11 @@ class BeginnerTradingSystem:
             'value': final_value,
             'percentage_of_capital': (final_value / self.capital) * 100,
             'percentage_of_available': (final_value / available_capital) * 100,
-            'reason': 'Suitable for investment',
+            'reason': f'Suitable for investment (NEPSE compliant: {final_shares} shares)',
             'max_allowed': max_position_value,
-            'recommended_amount': recommended_position_value
+            'recommended_amount': recommended_position_value,
+            'nepse_minimum': nepse_min_value,
+            'nepse_compliant': True
         }
     
     def run_beginner_analysis(self) -> Dict:
