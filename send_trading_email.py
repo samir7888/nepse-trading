@@ -22,8 +22,8 @@ def run_trading_system():
         # Start backend server
         print("Starting backend server...")
         backend_process = subprocess.Popen([
-            sys.executable, "start_backend.py"
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            sys.executable, "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"
+        ], cwd="backend", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
         # Give server time to start
         import time

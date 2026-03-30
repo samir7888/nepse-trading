@@ -16,7 +16,7 @@ def check_backend_installed():
         return False
 
 def install_backend():
-    """Install the backend nepse package"""
+    """Install the backend dependencies"""
     backend_path = Path("backend")
     if not backend_path.exists():
         print("❌ Backend folder not found!")
@@ -25,33 +25,46 @@ def install_backend():
     
     print("📦 Installing backend dependencies...")
     try:
-        # Change to backend directory and install
+        # Install backend requirements first
         original_dir = os.getcwd()
         os.chdir(backend_path)
         
-        result = subprocess.run([sys.executable, "-m", "pip", "install", "."], 
+        # Install requirements from backend/requirements.txt
+        print("📦 Installing from backend/requirements.txt...")
+        result = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
                               capture_output=True, text=True)
         
-        os.chdir(original_dir)
-        
-        if result.returncode == 0:
-            print("✅ Backend installed successfully!")
-            return True
-        else:
-            print(f"❌ Installation failed: {result.stderr}")
+        if result.returncode != 0:
+            print(f"❌ Requirements installation failed: {result.stderr}")
+            os.chdir(original_dir)
             return False
+        
+        # Also install the backend package itself if pyproject.toml exists
+        if Path("pyproject.toml").exists():
+            print("📦 Installing backend package...")
+            result2 = subprocess.run([sys.executable, "-m", "pip", "install", "."], 
+                                  capture_output=True, text=True)
+            if result2.returncode != 0:
+                print(f"⚠️  Backend package installation warning: {result2.stderr}")
+                # Don't fail here as the requirements might be enough
+        
+        os.chdir(original_dir)
+        print("✅ Backend dependencies installed successfully!")
+        return True
             
     except Exception as e:
         print(f"❌ Installation error: {e}")
+        if 'original_dir' in locals():
+            os.chdir(original_dir)
         return False
 
 def start_server():
     """Start the local backend server"""
-    server_path = Path("backend/example/NepseServer.py")
+    server_path = Path("backend/server.py")
     
     if not server_path.exists():
         print("❌ Server file not found!")
-        print("Expected location: backend/example/NepseServer.py")
+        print("Expected location: backend/server.py")
         return False
     
     print("🚀 Starting local NEPSE backend server...")
@@ -60,12 +73,12 @@ def start_server():
     print("="*50)
     
     try:
-        # Change to server directory and start
+        # Change to backend directory and start server
         original_dir = os.getcwd()
-        os.chdir("backend/example")
+        os.chdir("backend")
         
-        # Start the server
-        subprocess.run([sys.executable, "NepseServer.py"])
+        # Start the server using uvicorn (same as the server.py does)
+        subprocess.run([sys.executable, "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000", "--reload"])
         
     except KeyboardInterrupt:
         print("\n⏹️  Server stopped by user")

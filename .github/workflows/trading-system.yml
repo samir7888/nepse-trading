@@ -2,8 +2,8 @@ name: NEPSE Trading System
 
 on:
   schedule:
-    # Run every 2 days at 9:00 AM UTC (2:45 PM Nepal Time)
-    - cron: "0 9 */2 * *"
+    # Run every 2 days at 3:15 AM UTC (9:00 AM Nepal Time)
+    - cron: "15 3 */2 * *"
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -32,14 +32,29 @@ jobs:
       - name: Install backend dependencies
         run: |
           cd backend
-          pip install .
+          pip install -r requirements.txt
+          pip install . || echo "Backend package install failed, continuing..."
 
       - name: Start backend server in background
         run: |
-          cd backend/example
-          python NepseServer.py &
+          cd backend
+          python -m uvicorn server:app --host 0.0.0.0 --port 8000 &
           echo $! > server.pid
-          sleep 10  # Give server time to start
+          sleep 15  # Give server time to start
+
+      - name: Verify backend is running
+        run: |
+          # Wait for server to be ready
+          for i in {1..30}; do
+            if curl -f http://localhost:8000/health > /dev/null 2>&1; then
+              echo "✅ Backend server is running"
+              break
+            fi
+            echo "⏳ Waiting for backend... ($i/30)"
+            sleep 2
+          done
+          # Final check
+          curl -f http://localhost:8000/health || (echo "❌ Backend failed to start" && exit 1)
 
       - name: Run trading system
         run: |
@@ -47,8 +62,8 @@ jobs:
 
       - name: Stop backend server
         run: |
-          if [ -f backend/example/server.pid ]; then
-            kill $(cat backend/example/server.pid) || true
+          if [ -f backend/server.pid ]; then
+            kill $(cat backend/server.pid) || true
           fi
 
       - name: Send email with results
