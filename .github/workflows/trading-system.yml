@@ -31,9 +31,27 @@ jobs:
 
       - name: Install backend dependencies
         run: |
-          cd backend
-          pip install -r requirements.txt
-          pip install . || echo "Backend package install failed, continuing..."
+          if [ -d "backend" ]; then
+            echo "✅ Backend directory found"
+            cd backend
+            if [ -f "requirements.txt" ]; then
+              echo "✅ Installing backend requirements..."
+              pip install -r requirements.txt
+            else
+              echo "⚠️ No requirements.txt found in backend, installing basic dependencies..."
+              pip install fastapi uvicorn websockets
+              pip install git+https://github.com/basic-bgnr/NepseUnofficialApi.git@dev
+            fi
+            if [ -f "pyproject.toml" ]; then
+              echo "📦 Installing backend package..."
+              pip install . || echo "Backend package install failed, continuing..."
+            fi
+          else
+            echo "❌ Backend directory not found!"
+            echo "Available directories:"
+            ls -la
+            exit 1
+          fi
 
       - name: Start backend server in background
         run: |
