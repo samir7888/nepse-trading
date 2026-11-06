@@ -54,7 +54,7 @@ TRADING_RULES = {
 
 INVESTMENT_CAPITAL = {
     # 🎯 MAIN SETTING: Change this to your total investment budget
-    'total_budget': 20000,        # Your total investment budget in NPR
+    'total_budget': 500000,        # Your total investment budget in NPR
     
     # 📊 POSITION SIZING RULES (as percentage of total budget)
     'max_per_stock': 0.30,       # Maximum 30% of budget per stock (NPR 900 for 3000 budget)

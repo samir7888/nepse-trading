@@ -222,8 +222,8 @@ class NepseDataFetcher:
         
         for attempt in range(max_retries):
             try:
-                # Local backend uses URL path parameter for symbol
-                url = f"{self.base_url}{API_ENDPOINTS['historical']}/{symbol}"
+                # Local backend uses query parameter for symbol: ?symbol=SYMBOL
+                url = f"{self.base_url}{API_ENDPOINTS['historical']}?symbol={symbol}"
                 timeout = timeouts[attempt] if attempt < len(timeouts) else timeouts[-1]
                 logger.info(f"Fetching historical data for {symbol} (attempt {attempt + 1}/{max_retries}, timeout: {timeout}s)...")
                 
@@ -240,28 +240,37 @@ class NepseDataFetcher:
                         return self._generate_sample_historical_data(symbol, days)
                 
                 # Convert the time-series data from local backend
-                # Local backend returns [[timestamp, value], [timestamp, value], ...]
                 df_data = []
                 for item in data:
-                    if isinstance(item, list) and len(item) >= 2:
+                    timestamp = None
+                    price = None
+
+                    # Format A: dict object [{'time': 1786078860, 'contractRate': 384.9, ...}]
+                    if isinstance(item, dict):
+                        timestamp = item.get('time') or item.get('timestamp') or item.get('date')
+                        price = item.get('contractRate') or item.get('price') or item.get('close') or item.get('lastTradedPrice')
+                    # Format B: list object [[timestamp, value], ...]
+                    elif isinstance(item, list) and len(item) >= 2:
                         timestamp = item[0]
                         price = item[1]
-                        
+
+                    if timestamp is not None and price is not None:
+                        price = float(price)
                         # Convert timestamp to datetime
                         if isinstance(timestamp, (int, float)):
-                            # Unix timestamp in milliseconds
-                            date = pd.to_datetime(timestamp, unit='ms')
+                            # Check if timestamp is in seconds vs milliseconds
+                            unit = 'ms' if timestamp > 1e11 else 's'
+                            date = pd.to_datetime(timestamp, unit=unit)
                         else:
-                            # Try to parse as string
                             date = pd.to_datetime(timestamp)
                         
                         df_data.append({
                             'date': date,
-                            'close': float(price),
-                            'open': float(price),  # Use close as open (approximation)
-                            'high': float(price) * 1.02,  # Approximate high (2% above close)
-                            'low': float(price) * 0.98,   # Approximate low (2% below close)
-                            'volume': 1000  # Default volume
+                            'close': price,
+                            'open': price,
+                            'high': price,
+                            'low': price,
+                            'volume': 1000
                         })
                 
                 if not df_data:
